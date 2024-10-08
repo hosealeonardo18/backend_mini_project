@@ -23,7 +23,7 @@ return new class extends Migration
 
         Schema::create('item_penjualans', function (Blueprint $table) {
             $table->id();
-            $table->string('id_nota')->unique();
+            $table->string('id_nota');
             $table->string('kode_barang');
             $table->integer('qty');
             $table->timestamps();

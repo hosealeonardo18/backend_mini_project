@@ -2,13 +2,13 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Pelanggan;
+use App\Models\Barang;
 use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 
-class PelangganControllers extends Controller
+class BarangControllers extends Controller
 {
     public function index()
     {
@@ -20,23 +20,23 @@ class PelangganControllers extends Controller
             $offset = ($page - 1) * $limit;
             $search = request('search');
 
-            $pelanggan = Pelanggan::query();
+            $barang = Barang::query();
 
             if (!empty($search)) {
-                $pelanggan->where(function ($query) use ($search) {
+                $barang->where(function ($query) use ($search) {
                     $query->where('nama', 'like', '%' . $search . '%')
-                        ->orWhere('domisili', 'like', '%' . $search . '%')
-                        ->orWhere('jenis_kelamin', 'like', '%' . $search . '%');
+                        ->orWhere('kategori', 'like', '%' . $search . '%')
+                        ->orWhere('harga', 'like', '%' . $search . '%');
                 });
             }
 
-            $dbPelanggan = $pelanggan->orderBy($order, $sort)
+            $dbBarang = $barang->orderBy($order, $sort)
                 ->when($limit !== -1, function ($q) use ($offset, $limit) {
                     $q->skip($offset)->take($limit);
                 })->get();
 
 
-            $countData = $pelanggan->count();
+            $countData = $barang->count();
 
             $totalData = $countData;
             $totalPage = ceil($totalData / $limit);
@@ -48,7 +48,7 @@ class PelangganControllers extends Controller
                 'totalPage' => $totalPage
             ];
 
-            return handleResponse($dbPelanggan, false, 200, 'Succesfully get data pelanggan.', $pagination);
+            return handleResponse($dbBarang, false, 200, 'Succesfully get data barang.', $pagination);
         } catch (Exception $e) {
             return handleErrorException($e);
         }
@@ -66,73 +66,80 @@ class PelangganControllers extends Controller
                 throw new Exception($errorMessage, 422);
             }
 
+            $kategory = $request->kategori;
+            $number = 1;
+
+            $kodeBarang = strtolower($kategory) . '-' . str_pad($number, 3, '0', STR_PAD_LEFT);
+
+            while (Barang::where('kode', $kodeBarang)->exists()) {
+                $number++;
+
+                $kodeBarang = strtolower($kategory) . '-' . str_pad($number, 3, '0', STR_PAD_LEFT);
+            }
+
             $payload = [
-                "uid" => getUid(),
-                "nama" => strtoupper($data["nama"]),
-                "domisili" => strtoupper($data["domisili"]),
-                "jenis_kelamin" => $data["jenis_kelamin"],
+                "kode" => $kodeBarang,
+                "nama" => strtoupper($request->nama),
+                "kategori" => strtoupper($request->kategori),
+                "harga" => $request->harga,
             ];
 
-            $pelanggan = Pelanggan::create($payload);
+            $barang = Barang::create($payload);
 
             DB::commit();
-            return handleResponse($pelanggan, false, 201, 'Succesfully create data pelanggan.');
+            return handleResponse($barang, false, 201, 'Succesfully create data barang.');
         } catch (Exception $e) {
             DB::rollBack();
             return handleErrorException($e);
         }
     }
 
-    public function show(string $uid)
+    public function show(string $kode)
     {
         try {
-            $pelanggan = Pelanggan::where('uid', $uid)->first();
-            if (!$pelanggan) throw new Exception('Data pelanggan not found', 404);
+            $barang = Barang::where('kode', $kode)->first();
+            if (!$barang) throw new Exception('Data barang not found', 404);
 
-            return handleResponse($pelanggan, false, 200, 'Succesfully get detail data pelanggan.');
+            return handleResponse($barang, false, 200, 'Succesfully get detail data barang.');
         } catch (Exception $e) {
             return handleErrorException($e);
         }
     }
 
-    public function update(Request $request, string $uid)
+    public function update(Request $request, string $kode)
     {
         try {
-            $pelanggan = Pelanggan::where('uid', $uid)->first();
-            if (!$pelanggan) throw new Exception('Data pelanggan not found', 404);
+            $barang = Barang::where('kode', $kode)->first();
+            if (!$barang) throw new Exception('Data barang not found.', 404);
 
-            $currents = ["nama", "domisili", "jenis_kelamin"];
+            $currents = ['nama', 'kategori', 'harga'];
 
             $payload = [];
             foreach ($currents as $current) {
-                if (strtolower($request[$current]) != strtolower($pelanggan->$current)) {
+                if (strtolower($request[$current]) != strtolower($barang->$current)) {
                     $payload[$current] = strtoupper($request[$current]);
-
-                    if ($current == "jenis_kelamin") {
-                        $payload[$current] = $request[$current];
-                    }
                 }
             }
 
             if (!empty($payload)) {
-                $pelanggan->update($payload);
+                $barang->update($payload);
             } else {
                 return handleResponse(null, false, 200, 'No item data updated.');
             }
 
-            return handleResponse($payload, false, 201, "Succesfully update data $pelanggan->nama.");
+            return handleResponse($payload, false, 201, 'Succesfully update data barang.');
         } catch (Exception $e) {
             return handleErrorException($e);
         }
     }
 
-    public function destroy(string $uid)
+    public function destroy(string $kode)
     {
         try {
-            $pelanggan = Pelanggan::where('uid', $uid)->first();
-            if (!$pelanggan) throw new Exception('Data pelanggan not found', 404);
+            $barang = Barang::where('kode', $kode)->first();
+            if (!$barang) throw new Exception('Data barang not found', 404);
 
-            $pelanggan->delete();
+            $barang->delete();
             return handleResponse(null, false, 201, "Succesfully delete data.");
         } catch (Exception $e) {
             return handleErrorException($e);
@@ -143,8 +150,8 @@ class PelangganControllers extends Controller
     {
         $validator = Validator::make($data, [
             "nama" => "required|string",
-            "domisili" => "required|string",
-            "jenis_kelamin" => "required|string",
+            "kategori" => "required|string",
+            "harga" => "required|numeric",
         ]);
 
         return $validator;
